@@ -50,7 +50,7 @@ func NewAuthenticationServerProvider(baseUrl string) *AuthenticationServerProvid
 		client: http.Client{
 			Timeout: time.Second * 2,
 		},
-		baseUrl: baseUrl,
+		baseUrl: baseUrl + "%s",
 	}
 }
 

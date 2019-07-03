@@ -11,7 +11,7 @@ import (
 
 func main() {
 
-	baseUrl := getEnv("AUTHSERVER_URL", "https://devx.anypoint.mulesoft.com/accounts") + "%s"
+	baseUrl := getEnv("AUTHSERVER_URL", "https://devx.anypoint.mulesoft.com/accounts")
 	authenticationServerProvider := authserver.NewAuthenticationServerProvider(baseUrl)
 
 	config := http.Config{
