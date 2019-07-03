@@ -2,11 +2,13 @@ package http
 
 import (
 	"container/ring"
-	"github.com/mulesoft-labs/git-proxy/gitproxy"
+	"github.com/mulesoft-labs/gitproxy/gitproxy"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/security"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -20,7 +22,7 @@ type Account struct {
 	Password string
 }
 
-type HttpConfig struct {
+type Config struct {
 	Addr string
 	CertFile string
 	KeyFile string
@@ -28,19 +30,21 @@ type HttpConfig struct {
 	Accounts []Account
 }
 
-type HttpTransport struct {
-	HttpConfig HttpConfig
+type Transport struct {
+	HttpConfig Config
 
 	origin *url.URL
 
 	accounts *ring.Ring
+	provider security.Provider
 
 }
 
-func NewHttpTransport(config *HttpConfig) (*HttpTransport, error) {
+func NewHttpTransport(config Config, provider security.Provider) (*Transport, error) {
 
-	httpTransport := &HttpTransport{
-		HttpConfig: *config,
+	httpTransport := &Transport{
+		HttpConfig: config,
+		provider: provider,
 	}
 
 	var err error
@@ -62,13 +66,13 @@ func NewHttpTransport(config *HttpConfig) (*HttpTransport, error) {
 	return httpTransport, nil
 }
 
-func (t *HttpTransport) nextAccount() Account {
+func (t *Transport) nextAccount() Account {
 	nextVal := t.accounts.Next().Value.(int)
 	log.Printf("[DEBUG] HTTP: Accessing account #%d\n", nextVal)
 	return t.HttpConfig.Accounts[nextVal]
 }
 
-func (t *HttpTransport) Serve()  {
+func (t *Transport) Serve()  {
 
 	director := func(req *http.Request) {
 		req.Header.Add("X-Forwarded-Host", req.Host)
@@ -91,13 +95,19 @@ func (t *HttpTransport) Serve()  {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		var token string
+		var err error = nil
 		service := r.URL.Query().Get(GitServiceName)
 		repo := r.URL.Path
-		user, password, _ := r.BasicAuth()
-		log.Printf("[DEBUG] SSH: Serving %s for %s/%s", service, user, repo)
-		token, err := gitproxy.Login(user, password)
+		log.Printf("[DEBUG] SSH: Serving %s/%s", service, repo)
+		user, password, ok := r.BasicAuth()
+		if ok {
+			token, err = t.provider.Login(user, password)
+		} else {
+			token = strings.Split(r.Header.Get("Authorization"), "Bearer")[1]
+		}
 
-		if err == nil && gitproxy.IsAuthorized(token, repo, gitproxy.GetOperation(service)) {
+		if err == nil && t.provider.IsAuthorized(token, repo, gitproxy.GetOperation(service)) {
 			proxy.ServeHTTP(w, r)
 		} else {
 			w.WriteHeader(401)

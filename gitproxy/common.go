@@ -4,7 +4,6 @@ import (
 	"github.com/hashicorp/logutils"
 	"log"
 	"os"
-	"os/signal"
 	"time"
 )
 
@@ -41,8 +40,11 @@ func GetOperation(service string) GitOperation {
 	}
 }
 
-func WaitForCtrlC() {
-	signalChannel := make(chan os.Signal)
-	signal.Notify(signalChannel, os.Interrupt)
-	<-signalChannel
+func GetAction(op GitOperation) string {
+	if op == GitRead {
+		return "GET"
+	} else {
+		return "POST"
+	}
 }
+

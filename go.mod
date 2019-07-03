@@ -1,4 +1,4 @@
-module github.com/mulesoft-labs/git-proxy
+module github.com/mulesoft-labs/gitproxy
 
 go 1.12
 

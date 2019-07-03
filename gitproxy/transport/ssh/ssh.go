@@ -3,7 +3,8 @@ package ssh
 import (
 	"container/ring"
 	sshserver "github.com/gliderlabs/ssh"
-	"github.com/mulesoft-labs/git-proxy/gitproxy"
+	"github.com/mulesoft-labs/gitproxy/gitproxy"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/security"
 	sshclient "golang.org/x/crypto/ssh"
 	"io"
 	"io/ioutil"
@@ -18,7 +19,7 @@ type Account struct {
 
 }
 
-type SshConfig struct {
+type Config struct {
 	Addr string
 	HostKeyFile string
 	RemoteAddr string
@@ -31,11 +32,12 @@ type sshAccount struct {
 	publicKey sshserver.Signer
 }
 
-type SshTransport struct {
-	SshConfig SshConfig
+type Transport struct {
+	SshConfig Config
 
 	accounts *ring.Ring
 	remoteHostKey sshserver.PublicKey
+	provider security.Provider
 }
 
 func parsePrivateKey(privateKeyFile string) sshserver.Signer {
@@ -62,18 +64,19 @@ func parsePublicKey(publicKeyFile string) sshserver.PublicKey {
 	return signer
 }
 
-func (t *SshTransport) nextAccount() sshAccount {
+func (t *Transport) nextAccount() sshAccount {
 	nextVal := t.accounts.Next().Value.(sshAccount)
 	log.Printf("[DEBUG] SSH: Accessing account #%d\n", nextVal)
 	return nextVal
 }
 
 
-func NewSSHTransport(config *SshConfig) (*SshTransport, error) {
+func NewSSHTransport(config Config, provider security.Provider) (*Transport, error) {
 
-	sshTransport := &SshTransport{
-		SshConfig: *config,
+	sshTransport := &Transport{
+		SshConfig: config,
 		remoteHostKey: parsePublicKey(config.RemoteHostKey),
+		provider: provider,
 	}
 
 	sshTransport.accounts = ring.New(len(config.Accounts))
@@ -90,7 +93,7 @@ func NewSSHTransport(config *SshConfig) (*SshTransport, error) {
 	return sshTransport, nil
 }
 
-func (t *SshTransport) newDownstreamClient() (*sshclient.Client, error) {
+func (t *Transport) newDownstreamClient() (*sshclient.Client, error) {
 	account := t.nextAccount()
 	config := &sshclient.ClientConfig{
 		User: account.user,
@@ -104,7 +107,7 @@ func (t *SshTransport) newDownstreamClient() (*sshclient.Client, error) {
 	return sshclient.Dial("tcp", t.SshConfig.RemoteAddr, config)
 }
 
-func (t *SshTransport) exchange(downStream *sshclient.Session, upstream *sshserver.Session, cmd string) int {
+func (t *Transport) exchange(downStream *sshclient.Session, upstream *sshserver.Session, cmd string) int {
 	var exitCode int
 	log.Printf("[DEBUG] SSH: Command to send: %s", cmd)
 
@@ -144,11 +147,16 @@ func (t *SshTransport) exchange(downStream *sshclient.Session, upstream *sshserv
 	return exitCode
 }
 
-func (t *SshTransport) Serve() {
+func (t *Transport) Serve() {
 
 	hostKeyFile := sshserver.HostKeyFile(t.SshConfig.HostKeyFile)
 	publicKeyOption := sshserver.PublicKeyAuth(func(ctx sshserver.Context, key sshserver.PublicKey) bool {
-		return sshserver.KeysEqual(retrievePublicKey(ctx.User()), key)
+		for _,pk := range t.retrievePublicKeys(ctx.User()) {
+			if sshserver.KeysEqual(pk, key) {
+				return true
+			}
+		}
+		return false
 	})
 
 	handler := func(upstream sshserver.Session) {
@@ -161,7 +169,7 @@ func (t *SshTransport) Serve() {
 			repo := upstream.Command()[1]
 			user := upstream.User()
 			log.Printf("[DEBUG] Serving %s for %s/%s", service, user, repo)
-			if gitproxy.IsAuthorized(user, repo, gitproxy.GetOperation(service)) {
+			if t.provider.IsAuthorized(user, repo, gitproxy.GetOperation(service)) {
 
 				downstreamClient, err := t.newDownstreamClient()
 				if err != nil {
@@ -204,17 +212,22 @@ func isGitCommand(cmd string) bool {
 	return cmd == gitproxy.GitReceivePack || cmd == gitproxy.GitUploadPack
 }
 
-func retrievePublicKey(user string) sshserver.PublicKey {
+func (t *Transport) retrievePublicKeys(user string) []sshserver.PublicKey {
 	// retrieve user pk from store
 
-	pk, err := gitproxy.FetchUserPK(user)
+	pkBytes, err := t.provider.FetchUserPK(user)
 	if err != nil {
 		return nil
 	}
-	publicKey, err := sshclient.ParsePublicKey(pk)
-	if err != nil {
-		return nil
+	publicKeys := make([]sshserver.PublicKey, len(pkBytes))
+	for i, pk := range pkBytes {
+		publicKey, err := sshclient.ParsePublicKey(pk)
+		if err != nil {
+			log.Printf("[WARN] Can not parse public key: %v", err)
+		} else {
+			publicKeys[i] = publicKey
+		}
 	}
-	return publicKey
+	return publicKeys
 }
 

@@ -1,15 +1,20 @@
 package main
 
 import (
-	"github.com/mulesoft-labs/git-proxy/gitproxy"
-	"github.com/mulesoft-labs/git-proxy/gitproxy/http"
-	"github.com/mulesoft-labs/git-proxy/gitproxy/ssh"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/security/authserver"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/transport/http"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/transport/ssh"
 	"log"
+	"os"
+	"os/signal"
 )
 
 func main() {
 
-	config := &http.HttpConfig{
+	baseUrl := getEnv("AUTHSERVER_URL", "https://devx.anypoint.mulesoft.com/accounts") + "%s"
+	authenticationServerProvider := authserver.NewAuthenticationServerProvider(baseUrl)
+
+	config := http.Config{
 		Addr: ":443",
 		RemoteAddr: "https://github.com",
 		CertFile: "cert.pem",
@@ -22,31 +27,46 @@ func main() {
 		},
 	}
 
-	httpTransport, err := http.NewHttpTransport(config)
+	httpTransport, err := http.NewHttpTransport(config, authenticationServerProvider)
 	if err != nil {
 		log.Panic(err.Error())
 	}
 	httpTransport.Serve()
 
 
-	sshConfig := &ssh.SshConfig{
+	sshConfig := ssh.Config{
 		Addr: ":2222",
 		RemoteAddr: "github.com:22",
 		RemoteHostKey: "github.key",
-		HostKeyFile: "/etc/ssh/git_proxy",
-		Accounts: []ssh.Account {
+		HostKeyFile: "key.pem",
+		Accounts: []ssh.Account{
 			{
 				User: "patricio78",
-				PrivateKeyFile: "/etc/ssh/git_proxy",
+				PrivateKeyFile: "key.pem",
 			},
 		},
 	}
 
-	sshTransport, err := ssh.NewSSHTransport(sshConfig)
+	sshTransport, err := ssh.NewSSHTransport(sshConfig, authenticationServerProvider)
 	if err != nil {
 		log.Panic(err.Error())
 	}
 	sshTransport.Serve()
 
-	gitproxy.WaitForCtrlC()
+	waitForCtrlC()
 }
+
+func waitForCtrlC() {
+	signalChannel := make(chan os.Signal)
+	signal.Notify(signalChannel, os.Interrupt)
+	<-signalChannel
+}
+
+func getEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
+}
+
