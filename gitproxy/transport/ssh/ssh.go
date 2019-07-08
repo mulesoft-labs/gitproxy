@@ -4,6 +4,7 @@ import (
 	"container/ring"
 	sshserver "github.com/gliderlabs/ssh"
 	"github.com/mulesoft-labs/gitproxy/gitproxy"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/config"
 	"github.com/mulesoft-labs/gitproxy/gitproxy/security"
 	sshclient "golang.org/x/crypto/ssh"
 	"io"
@@ -13,27 +14,13 @@ import (
 	"time"
 )
 
-type Account struct {
-	User string
-	PrivateKeyFile string
-
-}
-
-type Config struct {
-	Addr string
-	HostKeyFile string
-	RemoteAddr string
-	RemoteHostKey string
-	Accounts []Account
-}
-
 type sshAccount struct {
 	user string
 	publicKey sshserver.Signer
 }
 
 type Transport struct {
-	SshConfig Config
+	SshConfig config.SshConfig
 
 	accounts *ring.Ring
 	remoteHostKey sshserver.PublicKey
@@ -71,7 +58,7 @@ func (t *Transport) nextAccount() sshAccount {
 }
 
 
-func NewSSHTransport(config Config, provider security.Provider) (*Transport, error) {
+func NewSSHTransport(config config.SshConfig, provider security.Provider) (*Transport, error) {
 
 	sshTransport := &Transport{
 		SshConfig: config,

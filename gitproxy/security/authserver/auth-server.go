@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/mulesoft-labs/gitproxy/gitproxy"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/config"
 	"github.com/mulesoft-labs/gitproxy/gitproxy/security"
 	"io/ioutil"
 	"net/http"
@@ -45,12 +46,12 @@ func (u *UserProfile) Id() string {
 	return u.User
 }
 
-func NewAuthenticationServerProvider(baseUrl string) *AuthenticationServerProvider {
+func NewAuthenticationServerProvider(config config.AuthenticationServerConfig) *AuthenticationServerProvider {
 	return &AuthenticationServerProvider{
 		client: http.Client{
 			Timeout: time.Second * 2,
 		},
-		baseUrl: baseUrl + "%s",
+		baseUrl: config.BaseUrl + "%s",
 	}
 }
 

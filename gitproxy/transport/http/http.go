@@ -3,6 +3,7 @@ package http
 import (
 	"container/ring"
 	"github.com/mulesoft-labs/gitproxy/gitproxy"
+	"github.com/mulesoft-labs/gitproxy/gitproxy/config"
 	"github.com/mulesoft-labs/gitproxy/gitproxy/security"
 	"log"
 	"net/http"
@@ -17,21 +18,8 @@ const (
 	GitServiceName string = "service"
 )
 
-type Account struct {
-	User string
-	Password string
-}
-
-type Config struct {
-	Addr string
-	CertFile string
-	KeyFile string
-	RemoteAddr string
-	Accounts []Account
-}
-
 type Transport struct {
-	HttpConfig Config
+	HttpConfig config.HttpConfig
 
 	origin *url.URL
 
@@ -40,7 +28,7 @@ type Transport struct {
 
 }
 
-func NewHttpTransport(config Config, provider security.Provider) (*Transport, error) {
+func NewHttpTransport(config config.HttpConfig, provider security.Provider) (*Transport, error) {
 
 	httpTransport := &Transport{
 		HttpConfig: config,
@@ -66,7 +54,7 @@ func NewHttpTransport(config Config, provider security.Provider) (*Transport, er
 	return httpTransport, nil
 }
 
-func (t *Transport) nextAccount() Account {
+func (t *Transport) nextAccount() config.HttpAccount {
 	nextVal := t.accounts.Next().Value.(int)
 	log.Printf("[DEBUG] HTTP: Accessing account #%d\n", nextVal)
 	return t.HttpConfig.Accounts[nextVal]
