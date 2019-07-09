@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/gliderlabs/ssh"
 	"github.com/mulesoft-labs/gitproxy/gitproxy"
 	"github.com/mulesoft-labs/gitproxy/gitproxy/config"
 	"github.com/mulesoft-labs/gitproxy/gitproxy/security"
+	sshclient "golang.org/x/crypto/ssh"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 )
@@ -106,9 +109,31 @@ func (p *AuthenticationServerProvider) FetchUserProfile(token string) (security.
 	return userProfile, nil
 }
 
-func (p *AuthenticationServerProvider) FetchUserPK(user string) ([][]byte, error) {
+func (p *AuthenticationServerProvider) fetchUserPK(user string) ([][]byte, error) {
 	return nil, nil
 }
+
+func (p *AuthenticationServerProvider) ValidatePublicKey(user string, key ssh.PublicKey) bool {
+	// retrieve user pk from store
+
+	pkBytes, err := p.fetchUserPK(user)
+	if err != nil {
+		log.Printf("[ERROR] %v", err)
+		return false
+	}
+	for _, pk := range pkBytes {
+		publicKey, err := sshclient.ParsePublicKey(pk)
+		if err != nil {
+			log.Printf("[WARN] Can not parse public key: %v\n", err)
+		} else {
+			if ssh.KeysEqual(publicKey, key) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 
 func (p *AuthenticationServerProvider) post(token *string, reqUrl string, body interface{}, response interface{}) error {
 

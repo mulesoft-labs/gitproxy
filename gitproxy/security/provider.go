@@ -1,6 +1,7 @@
 package security
 
 import (
+	"github.com/gliderlabs/ssh"
 	"github.com/mulesoft-labs/gitproxy/gitproxy"
 )
 
@@ -15,5 +16,5 @@ type Provider interface {
 
 	FetchUserProfile(token string) (UserProfile, error)
 
-	FetchUserPK(user string) ([][]byte, error)
+	ValidatePublicKey(user string, key ssh.PublicKey) bool
 }

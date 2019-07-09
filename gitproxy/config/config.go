@@ -11,10 +11,16 @@ type Config struct {
 	AuthServer AuthenticationServerConfig
 	HttpConfig HttpConfig
 	SshConfig SshConfig
+	Log Log
+}
+
+type Log struct {
+	MinLevel string
 }
 
 type AuthenticationServerConfig struct {
 	BaseUrl string
+	Mock bool
 }
 
 type HttpAccount struct {
@@ -48,8 +54,12 @@ type SshConfig struct {
 
 func NewConfig() Config {
 	return Config{
+		Log: Log {
+			MinLevel: getEnv("LOG_MINLEVEL", "WARN"),
+		},
 		AuthServer: AuthenticationServerConfig{
-			BaseUrl: getEnv("AUTHSERVER_URL", "https://devx.anypoint.mulesoft.com/accounts"),
+			BaseUrl: getEnv("AUTHSERVER_URL", ""),
+			Mock: boolVal(getEnv("AUTHSERVER_MOCK", "false")),
 		},
 		HttpConfig:HttpConfig{
 			Addr:getEnv("HTTPCONFIG_ADDR", ":443"),

@@ -15,8 +15,8 @@ import (
 )
 
 type sshAccount struct {
-	user string
-	publicKey sshserver.Signer
+	user       string
+	privateKey sshserver.Signer
 }
 
 type Transport struct {
@@ -53,7 +53,7 @@ func parsePublicKey(publicKeyFile string) sshserver.PublicKey {
 
 func (t *Transport) nextAccount() sshAccount {
 	nextVal := t.accounts.Next().Value.(sshAccount)
-	log.Printf("[DEBUG] SSH: Accessing account #%d\n", nextVal)
+	log.Printf("[DEBUG] SSH: Accessing account %v\n", nextVal)
 	return nextVal
 }
 
@@ -70,9 +70,9 @@ func NewSSHTransport(config config.SshConfig, provider security.Provider) (*Tran
 	accounts := sshTransport.accounts
 	for i := 0; i < accounts.Len(); i++ {
 		accounts = accounts.Next()
-		accounts.Value = &sshAccount{
-			user: config.Accounts[i].User,
-			publicKey: parsePrivateKey(config.Accounts[i].PrivateKeyFile),
+		accounts.Value = sshAccount{
+			user:       config.Accounts[i].User,
+			privateKey: parsePrivateKey(config.Accounts[i].PrivateKeyFile),
 		}
 
 	}
@@ -86,7 +86,7 @@ func (t *Transport) newDownstreamClient() (*sshclient.Client, error) {
 		User: account.user,
 		Auth: []sshclient.AuthMethod{
 			// Use the PublicKeys method for remote authentication.
-			sshclient.PublicKeys(account.publicKey),
+			sshclient.PublicKeys(account.privateKey),
 		},
 		HostKeyCallback: sshclient.FixedHostKey(t.remoteHostKey),
 		Timeout: time.Second * gitproxy.ConnectTimeout,
@@ -100,27 +100,34 @@ func (t *Transport) exchange(downStream *sshclient.Session, upstream *sshserver.
 
 	reader,err := downStream.StdoutPipe()
 	if err != nil {
-		log.Fatalf("unable to create stdout: %v", err)
+		log.Panicf("unable to create stdout: %v", err)
 	}
 	writer,err := downStream.StdinPipe()
 	if err != nil {
-		log.Fatalf("unable to create stdin: %v", err)
+		log.Panicf("unable to create stdin: %v", err)
 	}
 	err = downStream.Start(cmd)
 	if err != nil {
-		log.Fatalf("unable to run command: %v", err)
+		log.Panicf("unable to run command: %v", err)
 	}
 
+	eof := make(chan bool, 2)
+
 	copyConn := func(dst io.Writer, src io.Reader) {
-		_, err := io.Copy(writer, reader)
+		n, err := io.Copy(dst, src)
+		log.Printf("[DEBUG] Copying %d bytes", n)
 		if err != nil {
 			log.Printf("[DEBUG] SSH: unable to copy: %s", err)
 		}
+		eof <- true
 	}
 
-	go copyConn(writer, *upstream)
 	go copyConn(*upstream, reader)
+	go copyConn(writer, *upstream)
 
+
+	<- eof
+	<- eof
 	err = downStream.Wait()
 
 	if err == nil {
@@ -138,35 +145,37 @@ func (t *Transport) Serve() {
 
 	hostKeyFile := sshserver.HostKeyFile(t.SshConfig.HostKeyFile)
 	publicKeyOption := sshserver.PublicKeyAuth(func(ctx sshserver.Context, key sshserver.PublicKey) bool {
-		for _,pk := range t.retrievePublicKeys(ctx.User()) {
-			if sshserver.KeysEqual(pk, key) {
-				return true
-			}
-		}
-		return false
+		return t.provider.ValidatePublicKey(ctx.User(), key)
 	})
 
 	handler := func(upstream sshserver.Session) {
 		var err error
 		exitCode := 1
 
+		defer func() {
+			if err := recover(); err != nil{
+				log.Printf("[ERROR] %v", err)
+				upstream.Exit(1)
+			}
+		}()
+
 		if isGitShell(upstream.Command()) {
 
 			service := upstream.Command()[0]
 			repo := upstream.Command()[1]
 			user := upstream.User()
-			log.Printf("[DEBUG] Serving %s for %s/%s", service, user, repo)
+			log.Printf("[DEBUG] Serving %s for %s@%s", service, user, repo)
 			if t.provider.IsAuthorized(user, repo, gitproxy.GetOperation(service)) {
 
 				downstreamClient, err := t.newDownstreamClient()
 				if err != nil {
-					log.Fatalf("unable to connect: %v", err)
+					log.Panicf("unable to connect: %v", err)
 				}
 				defer downstreamClient.Close()
 
 				downstream, err := downstreamClient.NewSession()
 				if err != nil {
-					log.Fatalf("unable to create downstream: %v", err)
+					log.Panicf("unable to create downstream: %v", err)
 				}
 				defer downstream.Close()
 
@@ -177,7 +186,7 @@ func (t *Transport) Serve() {
 
 		err = upstream.Exit(exitCode)
 		if err != nil {
-			log.Fatalf("unable to send exit code: %v", err)
+			log.Panicf("unable to send exit code: %v", err)
 		}
 
 	}
@@ -197,24 +206,5 @@ func isGitShell(cmd []string) bool {
 
 func isGitCommand(cmd string) bool {
 	return cmd == gitproxy.GitReceivePack || cmd == gitproxy.GitUploadPack
-}
-
-func (t *Transport) retrievePublicKeys(user string) []sshserver.PublicKey {
-	// retrieve user pk from store
-
-	pkBytes, err := t.provider.FetchUserPK(user)
-	if err != nil {
-		return nil
-	}
-	publicKeys := make([]sshserver.PublicKey, len(pkBytes))
-	for i, pk := range pkBytes {
-		publicKey, err := sshclient.ParsePublicKey(pk)
-		if err != nil {
-			log.Printf("[WARN] Can not parse public key: %v", err)
-		} else {
-			publicKeys[i] = publicKey
-		}
-	}
-	return publicKeys
 }
 

@@ -1,20 +1,8 @@
 package gitproxy
 
 import (
-	"github.com/hashicorp/logutils"
-	"log"
-	"os"
 	"time"
 )
-
-func init() {
-	filter := &logutils.LevelFilter{
-		Levels: []logutils.LogLevel{"DEBUG", "WARN", "ERROR"},
-		MinLevel: logutils.LogLevel("DEBUG"),
-		Writer: os.Stderr,
-	}
-	log.SetOutput(filter)
-}
 
 type GitOperation int
 
