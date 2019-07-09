@@ -125,7 +125,6 @@ func (t *Transport) exchange(downStream *sshclient.Session, upstream *sshserver.
 	go copyConn(*upstream, reader)
 	go copyConn(writer, *upstream)
 
-
 	<- eof
 	<- eof
 	err = downStream.Wait()

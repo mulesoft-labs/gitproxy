@@ -1,4 +1,4 @@
-FROM golang:1.11 as builder
+FROM golang:1.12 as builder
 
 USER root
 
@@ -18,5 +18,8 @@ FROM artifacts.msap.io/mulesoft/core-paas-base-image-ubuntu:v3.0.191
 COPY --from=builder /build/main /app/
 
 WORKDIR /app
+
+EXPOSE 443
+EXPOSE 22
 
 CMD ["./main"]
