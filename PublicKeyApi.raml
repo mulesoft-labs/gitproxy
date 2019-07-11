@@ -1,0 +1,75 @@
+#%RAML 1.0
+version: v1
+title: PublicKey
+
+types:
+  PublicKey:
+    type: object
+    properties:
+      id: integer
+      title: string
+      key: string
+  PublicKeyNoID:
+    type: object
+    properties:
+      title: string
+      key: string
+
+/accounts/api/users/me/keys:
+  get:
+    responses:
+      200:
+        body:
+          application/json:
+            type: PublicKey[]
+            example:
+              [
+              {
+                "id": 1,
+                "title": "octocat@octomac",
+                "key": "ssh-rsa AAA..."
+              },
+              {
+                "id": 2,
+                "title": "octocat@octomac2",
+                "key": "ssh-rsa BBB..."
+              },
+              ]
+  post:
+    body:
+      application/json:
+        type: PublicKeyNoID
+        example:
+          {
+            "title": "octocat@octomac3",
+            "key": "ssh-rsa CCC..."
+          }
+    responses:
+      201:
+        body:
+          application/json:
+            type: PublicKey
+            example:
+              {
+                "id": 3,
+                "title": "octocat@octomac3",
+                "key": "ssh-rsa CCC..."
+              }
+
+  /{id}:
+    get:
+      responses:
+        200:
+          body:
+            application/json:
+              type: PublicKey
+              example:
+                {
+                  "id": 1,
+                  "title": "octocat@octomac",
+                  "key": "ssh-rsa AAA..."
+                }
+    delete:
+      responses:
+        204:
+

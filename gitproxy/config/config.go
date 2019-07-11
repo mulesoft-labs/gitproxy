@@ -93,6 +93,9 @@ func buildHttpAccounts(accounts string) []HttpAccount {
 	httpAccounts := make([]HttpAccount, len(split))
 	for i,val := range split {
 		account := strings.Split(val, ":")
+		if len(account) != 2 {
+			log.Panicf("Invalid http account")
+		}
 		httpAccounts[i] = HttpAccount{
 			User: account[0],
 			Password: account[1],
@@ -106,6 +109,9 @@ func buildSshAccounts(accounts string) []SshAccount {
 	httpAccounts := make([]SshAccount, len(split))
 	for i,val := range split {
 		account := strings.Split(val, ":")
+		if len(account) != 2 {
+			log.Panicf("Invalid ssh account")
+		}
 		httpAccounts[i] = SshAccount{
 			User: account[0],
 			PrivateKeyFile: account[1],
