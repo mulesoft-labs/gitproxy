@@ -61,22 +61,47 @@ func NewConfig() Config {
 			BaseUrl: getEnv("AUTHSERVER_URL", ""),
 			Mock: boolVal(getEnv("AUTHSERVER_MOCK", "false")),
 		},
-		HttpConfig:HttpConfig{
+		HttpConfig:buildHttpConfig(),
+		SshConfig:buildSshConfig(),
+	}
+}
+func buildHttpConfig() HttpConfig {
+
+	enabled := boolVal(getEnv("HTTPCONFIG_ENABLED", "false"))
+
+	if enabled {
+		return HttpConfig{
 			Addr:getEnv("HTTPCONFIG_ADDR", ":443"),
 			KeyFile:getEnv("HTTPCONFIG_KEYFILE", ""),
 			CertFile:getEnv("HTTPCONFIG_CERTFILE", ""),
 			RemoteAddr:getEnv("HTTPCONFIG_REMOTEADDR", ""),
 			Accounts: buildHttpAccounts(getEnv("HTTPCONFIG_ACCOUNTS", "")),
-			Enabled: boolVal(getEnv("HTTPCONFIG_ENABLED", "false")),
-		},
-		SshConfig:SshConfig{
-			Addr:getEnv("SSHCONFIG_ADDR", ":22"),
-			HostKeyFile:getEnv("SSHCONFIG_HOSTKEYFILE", ""),
-			RemoteAddr:getEnv("SSHCONFIG_REMOTEADDR", ""),
-			RemoteHostKey:getEnv("SSHCONFIG_REMOTEHOSTKEY", ""),
-			Accounts: buildSshAccounts(getEnv("SSHCONFIG_ACCOUNTS", "")),
-			Enabled: boolVal(getEnv("SSHCONFIG_ENABLED", "true")),
-		},
+			Enabled: true,
+		}
+	} else {
+		return HttpConfig{
+			Enabled: false,
+		}
+	}
+}
+
+func buildSshConfig() SshConfig {
+
+	enabled := boolVal(getEnv("SSHCONFIG_ENABLED", "true"))
+
+	if enabled {
+		return SshConfig{
+			Addr:          getEnv("SSHCONFIG_ADDR", ":22"),
+			HostKeyFile:   getEnv("SSHCONFIG_HOSTKEYFILE", ""),
+			RemoteAddr:    getEnv("SSHCONFIG_REMOTEADDR", ""),
+			RemoteHostKey: getEnv("SSHCONFIG_REMOTEHOSTKEY", ""),
+			Accounts:      buildSshAccounts(getEnv("SSHCONFIG_ACCOUNTS", "")),
+			Enabled:       true,
+		}
+	} else {
+		return SshConfig{
+			Enabled: false,
+		}
 	}
 }
 
