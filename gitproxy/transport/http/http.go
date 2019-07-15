@@ -101,7 +101,8 @@ func (t *Transport) Serve()  {
 		if err == nil && len(token) > 0 && t.provider.IsAuthorized(token, repo, gitproxy.GetOperation(service)) {
 			proxy.ServeHTTP(w, r)
 		} else {
-			w.Header().Set("WWW-Authenticate", "Basic realm=\"MuleSoft\"")
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			w.Header().Add("WWW-Authenticate", "Basic")
 			w.WriteHeader(401)
 		}
 	})
